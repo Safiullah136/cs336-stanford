@@ -1,12 +1,7 @@
 import regex as re
 from collections import defaultdict
 from tqdm.contrib.concurrent import process_map
-from save_bpe import *
-
-PAT = re.compile(r"""'(?:[sdmt]|ll|ve|re)| ?\p{L}+| ?\p{N}+| ?[^\s\p{L}\p{N}]+|\s+(?!\S)|\s+""")
-
-def word2bytes(word: str):
-    return tuple( bytes([b]) for b in list(word.encode("utf-8")) )
+from .common import word2bytes, PAT, split_on_special
 
 def merge_dicts(dicts):
     merged = defaultdict(int)
@@ -20,7 +15,6 @@ def update_neighbours(old, new, stats, freq, pair_to_words, word_idx):
     stats[new] += freq
 
     pair_to_words[new].add(word_idx)
-
 
 def merge_word(word, pair, stats, freq, pair_to_words, idx):
     new_word = []
@@ -64,19 +58,12 @@ def get_basic_vocab(special_tokens):
         vocab[idx + 256] = tok.encode("utf-8")
     return vocab
 
-def split_on_special(text, special_tokens):
-    if not special_tokens:
-        return [text]
-    
-    delimiter =  "|".join(re.escape(tok) for tok in special_tokens)
-    chunks = re.split(delimiter, text)
-    return [c for c in chunks if c]
-
 def collect_words_from_chunk(chunk):
     words = defaultdict(int)
     for word in PAT.finditer(string=chunk):
         word_bytes = word2bytes(word.group(0))
-        words[word_bytes] += 1
+        if len(word_bytes) >= 2:
+            words[word_bytes] += 1
 
     return words
 
@@ -123,7 +110,7 @@ def train_bpe(input_path: str, vocab_size: int, special_tokens: list[str]) -> tu
     return (vocab, merges)
 
 if __name__ == "__main__":
-    vocab, merges = train_bpe("./data/TinyStoriesV2-GPT4-valid.txt", 10000, ["<|endoftext|>"])
+    vocab, merges = train_bpe("./data/TinyStoriesV2-GPT4-valid.txt", 300, ["<|endoftext|>"])
     # save_tokenizer_yaml('tokenizer_tinystories_valid.yaml', vocab, merges)
     # loaded_vocab, loaded_merges = load_tokenizer_yaml('tokenizer_tinystories_valid.yaml')
     # assert set(vocab.keys()) == set(loaded_vocab.keys())
